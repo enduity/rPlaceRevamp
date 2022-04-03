@@ -24,7 +24,7 @@ logged_in = []
 allowed_restarts = 10
 restart_count = 0
 update_msg = ""
-bot_version = "1.6"
+bot_version = "1.7"
 
 def load_config():
     conf_file = open("./config.json", "r")
@@ -122,11 +122,11 @@ def image_updater(image_e, conf):
     global update_msg
     global bot_version
     url = conf["version_url"]
-    status = "continue"
     image_version = "0.0.1"
     tries = 0
 
     while True:
+        status = "continue"
         if tries >= 10:
             print('Failed to update image after 10 tries. Exiting.')
             os._exit(1)

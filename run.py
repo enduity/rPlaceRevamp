@@ -24,7 +24,7 @@ logged_in = []
 allowed_restarts = 10
 restart_count = 0
 update_msg = ""
-bot_version = "1.5"
+bot_version = "1.6"
 
 def load_config():
     conf_file = open("./config.json", "r")
@@ -78,7 +78,9 @@ def update_access_token(user_index):
         try:
             users[user_index]["access_token"] = response_data["access_token"]
             print("Access token updated " + log_username(user_index))
-            threading.Timer(int(response_data["expires_in"]), update_access_token, (user_index,)).start()
+            token_thread = threading.Timer(int(response_data["expires_in"]), update_access_token, (user_index,))
+            token_thread.daemon = True
+            token_thread.start()
             token_retries[user_index] = 0
         except KeyError:
             if token_retries[user_index] > 2:
@@ -87,7 +89,9 @@ def update_access_token(user_index):
             else:
                 print("Access token update failed, retrying in 30s " + log_username(user_index))
                 logged_in[user_index] = False
-                threading.Timer(30, update_access_token, (user_index,)).start()
+                retry_thread = threading.Timer(30, update_access_token, (user_index,))
+                retry_thread.daemon = True
+                retry_thread.start()
                 token_retries[user_index] += 1
 
 
@@ -285,7 +289,7 @@ def place_pixel(x, y, color, user_index):
 
     while y > 999:
         canvas_index += 1
-        x -= 1000
+        y -= 1000
 
     color_index = rgb_to_color_index(color)
 
@@ -397,25 +401,26 @@ def main_loop(image_e, conf):
                 did_place = False
                 changes_needed = 0
                 while True:
+                    x_pos = startpos[0]
                     while True:
                         if (pix_draw[x_pos, y_pos] != pix_board[x_pos, y_pos]) and (pix_draw[x_pos, y_pos] != (69, 42, 0)):
                             changes_needed += 1
                             user_index = -1
                             for try_user in available:
                                 user_index += 1
-
                                 if not try_user:
                                     continue
                                 if not logged_in[user_index]:
                                     continue
-
                                 placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
 
                                 available[user_index] = False
                                 available_in = next_time - math.floor(time.time())
 
                                 if available_in < 100000:
-                                    threading.Timer(available_in, lambda user_i=user_index: make_available(user_i)).start()
+                                    timer = threading.Timer(available_in, lambda user_i=user_index: make_available(user_i))
+                                    timer.daemon = True
+                                    timer.start()
                                 else:
                                     print("User likely banned. " + log_username(user_index))
                                     users[user_index]["banned"] = True
@@ -523,8 +528,10 @@ def main(conf):
 
             print("User " + u_name + " logged in.")
 
-            threading.Timer(int(response_data["expires_in"]) - 120 - random.randrange(1, 30),
-                            lambda user_i=user_index: update_access_token(user_i)).start()
+            token_thread = threading.Timer(int(response_data["expires_in"]) - 120 - random.randrange(1, 30),
+                            lambda user_i=user_index: update_access_token(user_i))
+            token_thread.daemon = True
+            token_thread.start()
 
             user_index += 1
         except KeyError:
@@ -539,12 +546,18 @@ def main(conf):
     token_retries = [0 for x in users]
     logged_in = [True for x in users]
 
-    threading.Thread(target=main_loop, args=(image_event, conf)).start()
+    main_thread = threading.Thread(target=main_loop, args=(image_event, conf))
+    main_thread.daemon = True
+    main_thread.start()
+    image_thread.daemon = True
     image_thread.start()
 
 
 if os.path.exists("./config.json"):
     config = load_config()
     main(config)
+
+    while True:
+        time.sleep(1)
 else:
     exit("No config.json file found. Read the README")

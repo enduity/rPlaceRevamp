@@ -334,7 +334,6 @@ def place_pixel(x, y, color, user_index):
     if (curr_time - last_place[user_index]) < 10:
         available[user_index] = False
     last_place[user_index] = curr_time
-
     return success, wait_time
 
 
@@ -406,7 +405,8 @@ def main_loop(image_e, conf):
                                     continue
                                 if not logged_in[user_index]:
                                     continue
-                                placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
+                                if (available[user_index]):
+                                    placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
 
                                 available[user_index] = False
                                 available_in = next_time - math.floor(time.time())

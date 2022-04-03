@@ -452,7 +452,8 @@ def main_loop(image_e, conf):
                     print("Waiting for available workers.")
                 else:
                     print("Waiting for available workers. Next worker in " + str(next_timestamp - math.floor(time.time())) + "s")
-                    print(update_msg)
+                    if len(update_msg):
+                        print(update_msg)
                 time.sleep(10)
     except Exception:
         restart_count += 1

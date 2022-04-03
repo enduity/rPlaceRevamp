@@ -18,6 +18,8 @@ available = []
 color_lookup = {}
 available_times = []
 last_place = [0, 0]
+token_retries = []
+logged_in = []
 
 def load_config():
     conf_file = open("./config.json", "r")
@@ -26,6 +28,8 @@ def load_config():
 
 def update_access_token(user_index):
     global users
+    global token_retries
+    global logged_in
 
     if not users[user_index]["banned"]:
         data = {
@@ -43,9 +47,20 @@ def update_access_token(user_index):
 
         response_data = r.json()
 
-        users[user_index]["access_token"] = response_data["access_token"]
-
-        threading.Timer(int(response_data["expires_in"]), update_access_token, (user_index,)).start()
+        try:
+            users[user_index]["access_token"] = response_data["access_token"]
+            print("Access token updated " + log_username(user_index))
+            threading.Timer(int(response_data["expires_in"]), update_access_token, (user_index,)).start()
+            token_retries[user_index] = 0
+        except KeyError:
+            if token_retries[user_index] > 2:
+                print("Access token update failed 3 times, no longer attempting " + log_username(user_index))
+                logged_in[user_index] = False
+            else:
+                print("Access token update failed, retrying in 30s " + log_username(user_index))
+                logged_in[user_index] = False
+                threading.Timer(30, update_access_token, (user_index,)).start()
+                token_retries[user_index] += 1
 
 
 def load_image_url(url):
@@ -354,6 +369,8 @@ def main_loop(image_e):
                         for try_user in available:
                             if not try_user:
                                 continue
+                            if not logged_in[user_index]:
+                                continue
                             placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
 
                             available[user_index] = False
@@ -412,6 +429,8 @@ def main(conf):
     global available
     global available_times
     global last_place
+    global token_retries
+    global logged_in
 
     user_index = 0
     for u_name, u_conf in conf["accounts"].items():
@@ -446,17 +465,26 @@ def main(conf):
 
         response_data = r.json()
 
-        users[user_index]["access_token"] = response_data["access_token"]
-        print("User " + u_name + " logged in.")
+        try:
+            users[user_index]["access_token"] = response_data["access_token"]
 
-        threading.Timer(int(response_data["expires_in"]) + random.randrange(1, 6), lambda user_i=user_index: update_access_token(user_i)).start()
+            print("User " + u_name + " logged in.")
 
-        user_index += 1
+            threading.Timer(int(response_data["expires_in"]) - 120 - random.randrange(1, 30),
+                            lambda user_i=user_index: update_access_token(user_i)).start()
+
+            user_index += 1
+        except KeyError:
+            print("User " + u_name + " login failed. Check the password and connection.")
+            users.pop()
+
         time.sleep(1)
 
     available = [True for x in users]
     available_times = [-1 for x in users]
     last_place = [0 for x in users]
+    token_retries = [0 for x in users]
+    logged_in = [True for x in users]
 
     threading.Thread(target=main_loop, args=(image_event,)).start()
     image_thread.start()

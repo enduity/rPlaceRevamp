@@ -1,0 +1,20 @@
+{
+    "app": {
+        "client_id": "YOUR-CLIENT-ID",
+        "secret_key": "YOUR-SECRET-KEY"
+    },
+    "accounts": {
+        "reddit_user_1": {
+            "pw": "USER-PASSWORD"
+        },
+        "reddit_user_2": {
+            "pw": "USER-PASSWORD",
+            "client_id": "OPTIONAL-CLIENT-ID",
+            "secret_key": "OPTIONAL-SECRET-KEY"
+        }
+    },
+    "img_conf": {
+        "version_url": "https://raw.githubusercontent.com/peeter-virk/rplace_img/main/update.php",
+        "images_base_url": "https://raw.githubusercontent.com/peeter-virk/rplace_img/main/"
+    }
+}

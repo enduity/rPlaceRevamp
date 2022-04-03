@@ -23,7 +23,8 @@ token_retries = []
 logged_in = []
 allowed_restarts = 10
 restart_count = 0
-
+update_msg = ""
+bot_version = "1.4"
 
 def load_config():
     conf_file = open("./config.json", "r")
@@ -114,6 +115,8 @@ def load_image_url(url):
 
 
 def image_updater(image_e, conf):
+    global update_msg
+    global bot_version
     url = conf["version_url"]
     status = "continue"
     image_version = "0.0.1"
@@ -138,6 +141,8 @@ def image_updater(image_e, conf):
             else:
                 data = resp.json()
         if status == "continue":
+            if version.parse(data["bot_version"]) > version.parse(bot_version):
+                update_msg = "Warning you are using an old version of this bot. Download new version at: " + data["download_link"]
             if version.parse(data["version"]) > version.parse(image_version):
                 image_version = data["version"]
                 print('New image version available. Downloading.')
@@ -329,7 +334,6 @@ def place_pixel(x, y, color, user_index):
     if (curr_time - last_place[user_index]) < 10:
         available[user_index] = False
     last_place[user_index] = curr_time
-
     return success, wait_time
 
 
@@ -354,6 +358,7 @@ def closest_color(target_rgb, color_array):
 
 
 def main_loop(image_e, conf):
+    global update_msg
     global available
     global im_draw
     global available_times
@@ -400,7 +405,8 @@ def main_loop(image_e, conf):
                                     continue
                                 if not logged_in[user_index]:
                                     continue
-                                placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
+                                if (available[user_index]):
+                                    placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
 
                                 available[user_index] = False
                                 available_in = next_time - math.floor(time.time())
@@ -446,6 +452,8 @@ def main_loop(image_e, conf):
                     print("Waiting for available workers.")
                 else:
                     print("Waiting for available workers. Next worker in " + str(next_timestamp - math.floor(time.time())) + "s")
+                    if len(update_msg):
+                        print(update_msg)
                 time.sleep(10)
     except Exception:
         restart_count += 1

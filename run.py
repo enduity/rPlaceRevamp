@@ -24,7 +24,7 @@ logged_in = []
 allowed_restarts = 10
 restart_count = 0
 update_msg = ""
-bot_version = "1.4"
+bot_version = "1.5"
 
 def load_config():
     conf_file = open("./config.json", "r")
@@ -320,13 +320,13 @@ def place_pixel(x, y, color, user_index):
         success = 0
         wait_time = math.floor(math.floor(
             response.json()["errors"][0]["extensions"]["nextAvailablePixelTs"]
-        ) / 1000)
+        ) / 1000) + random.randrange(0, 6)
         print("Placing failed: need to wait for " + str(wait_time - math.floor(time.time())) + " seconds " + log_username(user_index))
     else:
         success = 1
         wait_time = math.floor(int(
             response.json()["data"]["act"]["data"][0]["data"]["nextAvailablePixelTimestamp"]
-        ) / 1000)
+        ) / 1000) + random.randrange(0, 6)
         print("Placing succeeded: placed " + rgb_to_hex(color) + " to coordinates " + str(orig_coord[0]) + ", " + str(orig_coord[1]) + " " + log_username(user_index))
         print("Worker delayed for " + str(wait_time - math.floor(time.time())) + "s " + log_username(user_index))
 
@@ -378,6 +378,7 @@ def main_loop(image_e, conf):
                 new_im_draw.paste(im_draw, (0, 0))
                 pix_draw = new_im_draw.load()
                 pix_board = boardimg.load()
+                print("Board image with dimensions:", boardimg.size)
 
                 for color in place_config["colorPalette"]["colors"]:
                     color_lookup[color["hex"]] = color["index"]
@@ -399,14 +400,16 @@ def main_loop(image_e, conf):
                     while True:
                         if (pix_draw[x_pos, y_pos] != pix_board[x_pos, y_pos]) and (pix_draw[x_pos, y_pos] != (69, 42, 0)):
                             changes_needed += 1
-                            user_index = 0
+                            user_index = -1
                             for try_user in available:
+                                user_index += 1
+
                                 if not try_user:
                                     continue
                                 if not logged_in[user_index]:
                                     continue
-                                if (available[user_index]):
-                                    placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
+
+                                placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
 
                                 available[user_index] = False
                                 available_in = next_time - math.floor(time.time())
@@ -417,7 +420,6 @@ def main_loop(image_e, conf):
                                     print("User likely banned. " + log_username(user_index))
                                     users[user_index]["banned"] = True
                                 available_times[user_index] = next_time
-                                user_index += 1
 
                                 if placed:
                                     did_place = True

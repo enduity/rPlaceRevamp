@@ -73,4 +73,9 @@ python run.py
 python3 run.py
 ```
 
+## Known issues
+
+I am aware of the program spamming from startup in some cases. 
+This is probably some kind of threading issue, which I am unable to affect, or at least it's
+very difficult to debug. Just restart the program, and it should work.
 

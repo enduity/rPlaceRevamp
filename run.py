@@ -329,7 +329,6 @@ def place_pixel(x, y, color, user_index):
     if (curr_time - last_place[user_index]) < 10:
         available[user_index] = False
     last_place[user_index] = curr_time
-
     return success, wait_time
 
 
@@ -391,40 +390,34 @@ def main_loop(image_e, conf):
                 did_place = False
                 changes_needed = 0
                 while True:
-                    while True:
-                        if (pix_draw[x_pos, y_pos] != pix_board[x_pos, y_pos]) and (pix_draw[x_pos, y_pos] != (69, 42, 0)):
-                            changes_needed += 1
-                            user_index = 0
-                            for try_user in available:
-                                if not try_user:
-                                    continue
-                                if not logged_in[user_index]:
-                                    continue
+                    if (pix_draw[x_pos, y_pos] != pix_board[x_pos, y_pos]) and (pix_draw[x_pos, y_pos] != (69, 42, 0)):
+                        changes_needed += 1
+                        user_index = 0
+                        for try_user in available:
+                            if not try_user:
+                                continue
+                            if not logged_in[user_index]:
+                                continue
+                            if (available[user_index]):
                                 placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
+                            
+                            available[user_index] = False
+                            available_in = next_time - math.floor(time.time())
 
-                                available[user_index] = False
-                                available_in = next_time - math.floor(time.time())
+                            if available_in < 100000:
+                                threading.Timer(available_in, lambda user_i=user_index: make_available(user_i)).start()
+                            else:
+                                print("User likely banned. " + log_username(user_index))
+                                users[user_index]["banned"] = True
+                            available_times[user_index] = next_time
+                            user_index += 1
 
-                                if available_in < 100000:
-                                    threading.Timer(available_in, lambda user_i=user_index: make_available(user_i)).start()
-                                else:
-                                    print("User likely banned. " + log_username(user_index))
-                                    users[user_index]["banned"] = True
-                                available_times[user_index] = next_time
-                                user_index += 1
-
-                                if placed:
-                                    did_place = True
-                                    changes_needed -= 1
-                                    break
-                        if x_pos == (boardimg.size[0] - 1):
-                            x_pos = 0
-                        else:
-                            x_pos += 1
-                        if x_pos == startpos[0]:
-                            break
-                    if y_pos == (boardimg.size[1] - 1):
-                        y_pos = 0
+                            if placed:
+                                did_place = True
+                                changes_needed -= 1
+                                break
+                    if x_pos == (boardimg.size[0] - 1):
+                        x_pos = 0
                     else:
                         y_pos += 1
                     if y_pos == startpos[1]:

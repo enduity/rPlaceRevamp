@@ -17,6 +17,7 @@ im_draw = None
 available = []
 color_lookup = {}
 available_times = []
+last_place = [0, 0]
 
 def load_config():
     conf_file = open("./config.json", "r")
@@ -226,6 +227,8 @@ def log_username(index):
 
 
 def place_pixel(x, y, color, user_index):
+    global last_place
+    global available
     canvas_index = 0
 
     orig_coord = (x, y)
@@ -280,6 +283,11 @@ def place_pixel(x, y, color, user_index):
         print("Placing succeeded: placed " + rgb_to_hex(color) + " to coordinates " + str(orig_coord[0]) + ", " + str(orig_coord[1]) + " " + log_username(user_index))
         print("Worker delayed for " + str(wait_time - math.floor(time.time())) + "s " + log_username(user_index))
 
+    curr_time = math.floor(time.time())
+    if (curr_time - last_place[user_index]) < 10:
+        available[user_index] = False
+    last_place[user_index] = curr_time
+
     return success, wait_time
 
 
@@ -306,7 +314,6 @@ def closest_color(target_rgb, color_array):
 def main_loop(image_e):
     global available
     global im_draw
-    global next_worker
     global available_times
 
     print("Starting main loop...")
@@ -353,7 +360,7 @@ def main_loop(image_e):
                             available_in = next_time - math.floor(time.time())
 
                             if available_in < 100000:
-                                threading.Timer(available_in, lambda: make_available(user_index)).start()
+                                threading.Timer(available_in, lambda user_i=user_index: make_available(user_i)).start()
                             else:
                                 print("User likely banned. " + log_username(user_index))
                                 users[user_index]["banned"] = True
@@ -404,6 +411,7 @@ def main(conf):
     global users
     global available
     global available_times
+    global last_place
 
     user_index = 0
     for u_name, u_conf in conf["accounts"].items():
@@ -441,13 +449,14 @@ def main(conf):
         users[user_index]["access_token"] = response_data["access_token"]
         print("User " + u_name + " logged in.")
 
-        threading.Timer(int(response_data["expires_in"]) + random.randrange(1, 6), lambda: update_access_token(user_index)).start()
+        threading.Timer(int(response_data["expires_in"]) + random.randrange(1, 6), lambda user_i=user_index: update_access_token(user_i)).start()
 
         user_index += 1
         time.sleep(1)
 
     available = [True for x in users]
     available_times = [-1 for x in users]
+    last_place = [0 for x in users]
 
     threading.Thread(target=main_loop, args=(image_event,)).start()
     image_thread.start()

@@ -24,7 +24,7 @@ logged_in = []
 allowed_restarts = 10
 restart_count = 0
 update_msg = ""
-bot_version = "1.4"
+bot_version = "1.5"
 
 def load_config():
     conf_file = open("./config.json", "r")
@@ -405,11 +405,14 @@ def main_loop(image_e, conf):
                                     continue
                                 if not logged_in[user_index]:
                                     continue
+                                available_in = available_times[user_index]
                                 if (available[user_index]):
                                     placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
+                                    available_in = next_time - math.floor(time.time())
+                                else:
+                                    placed = 0
 
                                 available[user_index] = False
-                                available_in = next_time - math.floor(time.time())
 
                                 if available_in < 100000:
                                     threading.Timer(available_in, lambda user_i=user_index: make_available(user_i)).start()
@@ -546,3 +549,4 @@ if os.path.exists("./config.json"):
     main(config)
 else:
     exit("No config.json file found. Read the README")
+

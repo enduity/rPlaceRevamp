@@ -4,6 +4,7 @@ import os
 import random
 import threading
 import time
+import traceback
 from io import BytesIO
 
 import requests
@@ -20,10 +21,36 @@ available_times = []
 last_place = [0, 0]
 token_retries = []
 logged_in = []
+allowed_restarts = 10
+restart_count = 0
+
 
 def load_config():
     conf_file = open("./config.json", "r")
     return json.loads(conf_file.read())
+
+
+def reset_var():
+    global users
+    global im_draw
+    global available_times
+    global available
+    global color_lookup
+    global last_place
+    global token_retries
+    global logged_in
+    global allowed_restarts
+    global restart_count
+    users = []
+    im_draw = None
+    available = []
+    color_lookup = {}
+    available_times = []
+    last_place = [0, 0]
+    token_retries = []
+    logged_in = []
+    allowed_restarts = 10
+    restart_count = 0
 
 
 def update_access_token(user_index):
@@ -326,98 +353,114 @@ def closest_color(target_rgb, color_array):
     return min(color_diffs)[1]
 
 
-def main_loop(image_e):
+def main_loop(image_e, conf):
     global available
     global im_draw
     global available_times
+    global restart_count
 
     print("Starting main loop...")
     image_is_loaded = image_e.wait()
     last_scan = time.time()
 
-    while True:
-        if True in available:
-            print("Scan started.")
-            boardimg, place_config = get_board()
-            new_im_draw = Image.new("RGB", boardimg.size)
-            new_im_draw.paste((69, 42, 0), [0, 0, boardimg.size[0], boardimg.size[1]])
-            new_im_draw.paste(im_draw, (0, 0))
-            pix_draw = new_im_draw.load()
-            pix_board = boardimg.load()
+    try:
+        while True:
+            if True in available:
+                print("Scan started.")
+                boardimg, place_config = get_board()
+                new_im_draw = Image.new("RGB", boardimg.size)
+                new_im_draw.paste((69, 42, 0), [0, 0, boardimg.size[0], boardimg.size[1]])
+                new_im_draw.paste(im_draw, (0, 0))
+                pix_draw = new_im_draw.load()
+                pix_board = boardimg.load()
 
-            for color in place_config["colorPalette"]["colors"]:
-                color_lookup[color["hex"]] = color["index"]
+                for color in place_config["colorPalette"]["colors"]:
+                    color_lookup[color["hex"]] = color["index"]
 
-            color_table = []
-            for color in color_lookup:
-                color_table.append(tuple(int(color.lstrip("#")[i:i+2], 16) for i in (0, 2, 4)))
+                color_table = []
+                for color in color_lookup:
+                    color_table.append(tuple(int(color.lstrip("#")[i:i+2], 16) for i in (0, 2, 4)))
 
-            for y in range(boardimg.size[1]):
-                for x in range(boardimg.size[0]):
-                    pix_draw[x, y] = closest_color(pix_draw[x, y], color_table)
+                for y in range(boardimg.size[1]):
+                    for x in range(boardimg.size[0]):
+                        pix_draw[x, y] = closest_color(pix_draw[x, y], color_table)
 
-            startpos = [random.randrange(0, boardimg.size[0]), random.randrange(0, boardimg.size[1])]
-            x_pos = startpos[0]
-            y_pos = startpos[1]
-            did_place = False
-            changes_needed = 0
-            while True:
+                startpos = [random.randrange(0, boardimg.size[0]), random.randrange(0, boardimg.size[1])]
+                x_pos = startpos[0]
+                y_pos = startpos[1]
+                did_place = False
+                changes_needed = 0
                 while True:
-                    if (pix_draw[x_pos, y_pos] != pix_board[x_pos, y_pos]) and (pix_draw[x_pos, y_pos] != (69, 42, 0)):
-                        changes_needed += 1
-                        user_index = 0
-                        for try_user in available:
-                            if not try_user:
-                                continue
-                            if not logged_in[user_index]:
-                                continue
-                            placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
+                    while True:
+                        if (pix_draw[x_pos, y_pos] != pix_board[x_pos, y_pos]) and (pix_draw[x_pos, y_pos] != (69, 42, 0)):
+                            changes_needed += 1
+                            user_index = 0
+                            for try_user in available:
+                                if not try_user:
+                                    continue
+                                if not logged_in[user_index]:
+                                    continue
+                                placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
 
-                            available[user_index] = False
-                            available_in = next_time - math.floor(time.time())
+                                available[user_index] = False
+                                available_in = next_time - math.floor(time.time())
 
-                            if available_in < 100000:
-                                threading.Timer(available_in, lambda user_i=user_index: make_available(user_i)).start()
-                            else:
-                                print("User likely banned. " + log_username(user_index))
-                                users[user_index]["banned"] = True
-                            available_times[user_index] = next_time
-                            user_index += 1
+                                if available_in < 100000:
+                                    threading.Timer(available_in, lambda user_i=user_index: make_available(user_i)).start()
+                                else:
+                                    print("User likely banned. " + log_username(user_index))
+                                    users[user_index]["banned"] = True
+                                available_times[user_index] = next_time
+                                user_index += 1
 
-                            if placed:
-                                did_place = True
-                                changes_needed -= 1
-                                break
-                    if x_pos == (boardimg.size[0] - 1):
-                        x_pos = 0
+                                if placed:
+                                    did_place = True
+                                    changes_needed -= 1
+                                    break
+                        if x_pos == (boardimg.size[0] - 1):
+                            x_pos = 0
+                        else:
+                            x_pos += 1
+                        if x_pos == startpos[0]:
+                            break
+                    if y_pos == (boardimg.size[1] - 1):
+                        y_pos = 0
                     else:
-                        x_pos += 1
-                    if x_pos == startpos[0]:
+                        y_pos += 1
+                    if y_pos == startpos[1]:
                         break
-                if y_pos == (boardimg.size[1] - 1):
-                    y_pos = 0
+                if changes_needed == 0:
+                    print("Scan finished. Found no pixels to change.")
+                elif changes_needed and (not did_place):
+                    print("Scan finished. There are " + str(changes_needed) + " pixels to change, but no more workers are available.")
+                if not did_place:
+                    curr_time = time.time()
+                    if (curr_time - last_scan) < 5:
+                        time.sleep(30)
+                    last_scan = curr_time
                 else:
-                    y_pos += 1
-                if y_pos == startpos[1]:
-                    break
-            if changes_needed == 0:
-                print("Scan finished. Found no pixels to change.")
-            elif changes_needed and (not did_place):
-                print("Scan finished. There are " + str(changes_needed) + " pixels to change, but no more workers are available.")
-            if not did_place:
-                curr_time = time.time()
-                if (curr_time - last_scan) < 5:
-                    time.sleep(30)
-                last_scan = curr_time
+                    time.sleep(1)
             else:
-                time.sleep(1)
+                next_timestamp = min(available_times)
+                if next_timestamp < 0:
+                    print("Waiting for available workers.")
+                else:
+                    print("Waiting for available workers. Next worker in " + str(next_timestamp - math.floor(time.time())) + "s")
+                time.sleep(10)
+    except Exception:
+        restart_count += 1
+        if restart_count < 11:
+            print("--- ERROR ---")
+            traceback.print_exc()
+            print("--- RESTARTING AUTOMATICALLY ---")
+            print(str(allowed_restarts - restart_count) + " automatic restart(s) left before failing.")
+            print("--------------------------------")
+            reset_var()
+            main(conf)
         else:
-            next_timestamp = min(available_times)
-            if next_timestamp < 0:
-                print("Waiting for available workers.")
-            else:
-                print("Waiting for available workers. Next worker in " + str(next_timestamp - math.floor(time.time())) + "s")
-            time.sleep(10)
+            traceback.print_exc()
+            print("--- FATAL FAILURE ---")
+            os._exit(1)
 
 
 def main(conf):
@@ -486,7 +529,7 @@ def main(conf):
     token_retries = [0 for x in users]
     logged_in = [True for x in users]
 
-    threading.Thread(target=main_loop, args=(image_event,)).start()
+    threading.Thread(target=main_loop, args=(image_event, conf)).start()
     image_thread.start()
 
 

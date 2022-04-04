@@ -24,7 +24,8 @@ logged_in = []
 allowed_restarts = 10
 restart_count = 0
 update_msg = ""
-bot_version = "1.8"
+bot_version = "2.0"
+scan_type = "forward"
 
 def load_config():
     conf_file = open("./config.json", "r")
@@ -42,6 +43,7 @@ def reset_var():
     global logged_in
     global allowed_restarts
     global restart_count
+    global scan_type
     users = []
     im_draw = None
     available = []
@@ -52,6 +54,7 @@ def reset_var():
     logged_in = []
     allowed_restarts = 10
     restart_count = 0
+    scan_type = "forward"
 
 
 def update_access_token(user_index):
@@ -121,6 +124,7 @@ def load_image_url(url):
 def image_updater(image_e, conf):
     global update_msg
     global bot_version
+    global scan_type
     url = conf["version_url"]
     image_version = "0.0.1"
     tries = 0
@@ -148,6 +152,12 @@ def image_updater(image_e, conf):
             if version.parse(data["bot_version"]) > version.parse(bot_version):
                 update_msg = "Warning you are using an old version of this bot. Download new version at: " + data["download_link"]
             if version.parse(data["version"]) > version.parse(image_version):
+                try:
+                    scan_type = data["scan_type"]
+                    print("New scan type: " + scan_type)
+                except KeyError:
+                    print("No scan type found")
+
                 image_version = data["version"]
                 print('New image version available. Downloading.')
                 result = load_image_url(
@@ -324,13 +334,13 @@ def place_pixel(x, y, color, user_index):
         success = 0
         wait_time = math.floor(math.floor(
             response.json()["errors"][0]["extensions"]["nextAvailablePixelTs"]
-        ) / 1000) + random.randrange(0, 6)
+        ) / 1000) + random.randrange(0, 12)
         print("Placing failed: need to wait for " + str(wait_time - math.floor(time.time())) + " seconds " + log_username(user_index))
     else:
         success = 1
         wait_time = math.floor(int(
             response.json()["data"]["act"]["data"][0]["data"]["nextAvailablePixelTimestamp"]
-        ) / 1000) + random.randrange(0, 6)
+        ) / 1000) + random.randrange(0, 12)
         print("Placing succeeded: placed " + rgb_to_hex(color) + " to coordinates " + str(orig_coord[0]) + ", " + str(orig_coord[1]) + " " + log_username(user_index))
         print("Worker delayed for " + str(wait_time - math.floor(time.time())) + "s " + log_username(user_index))
 
@@ -400,36 +410,15 @@ def main_loop(image_e, conf):
                 y_pos = startpos[1]
                 did_place = False
                 changes_needed = 0
+
+                to_draw = []
+
                 while True:
                     x_pos = startpos[0]
                     while True:
-                        if (pix_draw[x_pos, y_pos] != pix_board[x_pos, y_pos]) and (pix_draw[x_pos, y_pos] != (69, 42, 0)):
-                            changes_needed += 1
-                            user_index = -1
-                            for try_user in available:
-                                user_index += 1
-                                if not try_user:
-                                    continue
-                                if not logged_in[user_index]:
-                                    continue
-                                placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
-
-                                available[user_index] = False
-                                available_in = next_time - math.floor(time.time())
-
-                                if available_in < 100000:
-                                    timer = threading.Timer(available_in, lambda user_i=user_index: make_available(user_i))
-                                    timer.daemon = True
-                                    timer.start()
-                                else:
-                                    print("User likely banned. " + log_username(user_index))
-                                    users[user_index]["banned"] = True
-                                available_times[user_index] = next_time
-
-                                if placed:
-                                    did_place = True
-                                    changes_needed -= 1
-                                    break
+                        if (pix_draw[x_pos, y_pos] != pix_board[x_pos, y_pos]) and (
+                                pix_draw[x_pos, y_pos] != (69, 42, 0)):
+                            to_draw.append([x_pos, y_pos, pix_draw[x_pos, y_pos]])
                         if x_pos == (boardimg.size[0] - 1):
                             x_pos = 0
                         else:
@@ -442,6 +431,107 @@ def main_loop(image_e, conf):
                         y_pos += 1
                     if y_pos == startpos[1]:
                         break
+
+                if scan_type == "forward":
+                    for i in to_draw:
+                        changes_needed += 1
+                        user_index = -1
+
+                        x_pos, y_pos, color = i
+
+                        for try_user in available:
+                            user_index += 1
+                            if not try_user:
+                                continue
+                            if not logged_in[user_index]:
+                                continue
+                            placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
+
+                            available[user_index] = False
+                            available_in = next_time - math.floor(time.time())
+
+                            if available_in < 100000:
+                                timer = threading.Timer(available_in, lambda user_i=user_index: make_available(user_i))
+                                timer.daemon = True
+                                timer.start()
+                            else:
+                                print("User likely banned. " + log_username(user_index))
+                                users[user_index]["banned"] = True
+                            available_times[user_index] = next_time
+
+                            if placed:
+                                did_place = True
+                                changes_needed -= 1
+                                break
+                elif scan_type == "backward":
+                    to_draw.reverse()
+                    for i in to_draw:
+                        changes_needed += 1
+                        user_index = -1
+
+                        x_pos, y_pos, color = i
+
+                        for try_user in available:
+                            user_index += 1
+                            if not try_user:
+                                continue
+                            if not logged_in[user_index]:
+                                continue
+                            placed, next_time = place_pixel(x_pos, y_pos, pix_draw[x_pos, y_pos], user_index)
+
+                            available[user_index] = False
+                            available_in = next_time - math.floor(time.time())
+
+                            if available_in < 100000:
+                                timer = threading.Timer(available_in, lambda user_i=user_index: make_available(user_i))
+                                timer.daemon = True
+                                timer.start()
+                            else:
+                                print("User likely banned. " + log_username(user_index))
+                                users[user_index]["banned"] = True
+                            available_times[user_index] = next_time
+
+                            if placed:
+                                did_place = True
+                                changes_needed -= 1
+                                break
+                elif scan_type == "random":
+                    for i in range(len(to_draw)):
+                        pix_index = random.randrange(0, len(to_draw))
+                        changes_needed += 1
+                        user_index = -1
+
+                        x_pos, y_pos, color = to_draw[pix_index]
+
+                        for try_user in available:
+
+                            user_index += 1
+                            if not try_user:
+                                continue
+                            if not logged_in[user_index]:
+                                continue
+                            placed, next_time = place_pixel(x_pos, y_pos, color, user_index)
+
+                            available[user_index] = False
+                            available_in = next_time - math.floor(time.time())
+
+                            if available_in < 100000:
+                                timer = threading.Timer(available_in, lambda user_i=user_index: make_available(user_i))
+                                timer.daemon = True
+                                timer.start()
+                            else:
+                                print("User likely banned. " + log_username(user_index))
+                                users[user_index]["banned"] = True
+                            available_times[user_index] = next_time
+
+                            if placed:
+                                did_place = True
+                                changes_needed -= 1
+                                break
+                        to_draw.pop(pix_index)
+                else:
+                    raise ValueError("Invalid scan type!")
+
                 if changes_needed == 0:
                     print("Scan finished. Found no pixels to change.")
                 elif changes_needed and (not did_place):

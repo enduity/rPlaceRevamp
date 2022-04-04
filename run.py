@@ -24,7 +24,7 @@ logged_in = []
 allowed_restarts = 10
 restart_count = 0
 update_msg = ""
-bot_version = "1.7"
+bot_version = "1.8"
 
 def load_config():
     conf_file = open("./config.json", "r")

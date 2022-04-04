@@ -288,7 +288,7 @@ def place_pixel(x, y, color, user_index):
         x -= 1000
 
     while y > 999:
-        canvas_index += 1
+        canvas_index += 2
         y -= 1000
 
     color_index = rgb_to_color_index(color)
